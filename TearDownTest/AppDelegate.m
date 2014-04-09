@@ -17,7 +17,7 @@
 @synthesize persistentStoreCoordinator = _persistentStoreCoordinator;
 
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions
-{
+{    
     // Override point for customization after application launch.
     UINavigationController *navigationController = (UINavigationController *)self.window.rootViewController;
     MasterViewController *controller = (MasterViewController *)navigationController.topViewController;
@@ -101,6 +101,8 @@
 // If the coordinator doesn't already exist, it is created and the application's store added to it.
 - (NSPersistentStoreCoordinator *)persistentStoreCoordinator
 {
+    // the default test just checks if the variable is nil
+    // we need to amend this to not return if there are no store files
     if (_persistentStoreCoordinator != nil) {
         return _persistentStoreCoordinator;
     }
@@ -146,6 +148,44 @@
 - (NSURL *)applicationDocumentsDirectory
 {
     return [[[NSFileManager defaultManager] URLsForDirectory:NSDocumentDirectory inDomains:NSUserDomainMask] lastObject];
+}
+
+# pragma mark - Core Data Rebuild
+
+- (void)tearDownCoreDataStack {
+    
+    // lock and reset the context
+    [self.managedObjectContext lock];
+    [self.managedObjectContext reset];
+    
+    // remove all store files
+    NSArray *allStoreFiles = self.persistentStoreCoordinator.persistentStores;
+    for (NSPersistentStore *currentStore in allStoreFiles) {
+        
+        NSError *removalError;
+        if (![self.persistentStoreCoordinator removePersistentStore:currentStore error:&removalError]) {
+            NSLog(@"Could not remove store with URL %@ - %@", currentStore.URL, removalError.localizedFailureReason);
+        }
+        
+        // you can also delete them if you like
+        NSError *deleteError;
+        if (![[NSFileManager defaultManager] removeItemAtURL:currentStore.URL error:&deleteError]) {
+            NSLog(@"Could not remove store file from disk: %@ - %@", currentStore.URL, deleteError.localizedFailureReason);
+        }
+    }
+    
+    _managedObjectContext = nil;
+    _persistentStoreCoordinator = nil;
+    
+    [self managedObjectContext];
+    
+    // we need to update the Master View's context too
+    UINavigationController *navigationController = (UINavigationController *)self.window.rootViewController;
+    MasterViewController *controller = (MasterViewController *)navigationController.topViewController;
+    controller.managedObjectContext = self.managedObjectContext;
+    
+    // unlock the context
+    [self.managedObjectContext unlock];
 }
 
 @end
